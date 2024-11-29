@@ -1,5 +1,5 @@
 use alloy::primitives::U256;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 pub mod implementation;
 

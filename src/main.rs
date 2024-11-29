@@ -1,13 +1,16 @@
-use std::{fs, sync::{Arc, Mutex}};
+use std::{
+    fs,
+    sync::{Arc, Mutex},
+};
 
 use actix_web::{web, App, HttpServer};
-use log4rs;
 use log::error;
+use log4rs;
 
 mod clvr;
-mod trades;
-mod server;
 mod executor;
+mod server;
+mod trades;
 
 const PORT: u16 = 8080;
 

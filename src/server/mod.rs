@@ -1,4 +1,3 @@
-
 use alloy::primitives::U256;
 
 use crate::clvr::model::{clvr_model::CLVRModel, Omega};
@@ -16,10 +15,7 @@ impl CoreScheduler {
         let omega = Omega::new();
         let model = CLVRModel::new(reserve_y, reserve_x);
 
-        Self {
-            omega,
-            model,
-        }
+        Self { omega, model }
     }
 
     fn add_trade(&mut self, trade: Box<dyn ITrade>) {
