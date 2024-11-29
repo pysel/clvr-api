@@ -9,10 +9,8 @@ use log4rs;
 
 mod clvr;
 mod executor;
-mod server;
+mod scheduler;
 mod trades;
-
-const PORT: u16 = 8080;
 
 async fn cleanup() {
     let log_dir = "log"; // Specify your log directory here
