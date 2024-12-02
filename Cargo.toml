@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 actix-web = "4.9.0"
 alloy = { version = "0.6.2", features = ["full"] }
+crossbeam = "0.8.4"
 diesel = "2.2.4"
 dotenv = "0.15.0"
 eyre = "0.6.12"

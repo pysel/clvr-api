@@ -1,9 +1,13 @@
-use std::{
-    fs,
-    sync::{Arc, Mutex},
-};
+use std::{fs, thread};
+use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc;
+use std::error::Error;
+use tokio::net::TcpStream;
+use tokio::runtime::Handle;
+use tokio::io::AsyncReadExt;
+use crossbeam::channel;
 
-use actix_web::{web, App, HttpServer};
+use executor::Executor;
 use log::error;
 use log4rs;
 
@@ -12,7 +16,7 @@ mod executor;
 mod scheduler;
 mod trades;
 
-async fn cleanup() {
+fn cleanup() {
     let log_dir = "log"; // Specify your log directory here
     if let Err(e) = fs::remove_dir_all(log_dir) {
         eprintln!("Error removing log directory: {}", e);
@@ -28,34 +32,26 @@ fn get_chain_id() -> u64 {
         .expect("CHAIN_ID must be a valid number")
 }
 
-// async fn expose_api(scheduled_db: ScheduledDatabase) {
-//     match HttpServer::new(move || {
-//         let app_data = web::Data::new(scheduled_db.clone());
-//         App::new()
-//             .app_data(app_data)
-//             .service(server::handlers::num_trades)
-//             .service(server::handlers::submit_trade)
-//     })
-//     .bind(("127.0.0.1", 8080)).expect("Failed to bind to port")
-//     .workers(2)
-//     .run()
-//     .await {
-//         Ok(_) => (),
-//         Err(e) => error!("Error running HTTP server: {}", e),
-//     }
-// }
-
 fn main() {
     // load environment variables
     dotenv::dotenv().ok();
 
+    // cleanup existing log files before starting
+    cleanup();
+
     // init logging
-    cleanup(); // cleanup existing log files before starting
     if let Err(e) = log4rs::init_file("log4rs.yml", Default::default()) {
         error!("Error initializing logging: {}", e);
         std::process::exit(1);
     }
 
-    // start the process that waits and submits trades
-    let executor = executor::Executor::new();
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+
+    let executor = rt.block_on(async { 
+        let executor = executor::Executor::new().await;
+        executor
+     });
 }

@@ -3,6 +3,8 @@ use alloy::primitives::U256;
 use crate::clvr::model::{clvr_model::CLVRModel, Omega};
 use crate::trades::ITrade;
 
+pub mod hook;
+
 // CoreScheduler is responsible for performing one instance of the algorithm. Called by executor. (TODO: probably rename these two)
 pub struct CoreScheduler {
     omega: Omega,
