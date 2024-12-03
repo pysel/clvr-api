@@ -1,7 +1,6 @@
 use crate::{scheduler::hook::ClvrHook::SwapParamsExtended, trades::{ITrade, TradeDirection}};
 use alloy::primitives::U256;
 use serde::{Deserialize, Serialize};
-use crate::scheduler::hook::IPoolManager::SwapParams;
 
 #[derive(PartialEq, Debug, Deserialize, Serialize)]
 pub struct Trade {
@@ -44,7 +43,8 @@ impl ITrade for Trade {
 
 #[cfg(test)]
 mod tests {
-    use alloy::primitives::{address, Address, I256, U160};
+    use alloy::primitives::{Address, I256, U160};
+    use crate::scheduler::hook::IPoolManager::SwapParams;
 
     use super::*;
 

@@ -32,7 +32,8 @@ fn get_chain_id() -> u64 {
         .expect("CHAIN_ID must be a valid number")
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // load environment variables
     dotenv::dotenv().ok();
 
@@ -45,13 +46,6 @@ fn main() {
         std::process::exit(1);
     }
 
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-
-    let executor = rt.block_on(async { 
-        let executor = executor::Executor::new().await;
-        executor
-     });
+    let executor = executor::Executor::new().await;
+    executor.run().await;
 }

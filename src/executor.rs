@@ -1,10 +1,11 @@
 use alloy::{
-    contract::Error, primitives::{address, Address}, providers::{Provider, ProviderBuilder, RootProvider}, rpc::types::TransactionRequest, transports::http::{Client, Http}
+    contract::Error, dyn_abi::SolType, hex, primitives::{address, Address, U256}, providers::{Provider, ProviderBuilder, RootProvider}, rpc::types::TransactionRequest, transports::http::{Client, Http}
 };
 use log::{error, info};
+use std::time::Duration;
 use tokio::time::sleep;
 
-use crate::scheduler::hook::ClvrHook::{self, lastBatchBlockReturn, BATCH_PERIODReturn};
+use crate::{clvr::model::{clvr_model::CLVRModel, Omega}, scheduler::hook::ClvrHook::{self, getCurrentPriceReturn, getCurrentReservesReturn, lastBatchBlockReturn, BATCH_PERIODReturn, PoolKey}, trades::implementation::Trade};
 
 pub type HttpTransport = Http<Client>;
 
@@ -12,7 +13,7 @@ pub type HttpTransport = Http<Client>;
 pub struct Executor {
     provider: RootProvider<HttpTransport>,
     hook_contract: ClvrHook::ClvrHookInstance<HttpTransport, RootProvider<HttpTransport>>,
-    pool_key: String,
+    pool_key: PoolKey,
 }
 
 impl Executor {
@@ -26,21 +27,79 @@ impl Executor {
 
         let hook_contract = ClvrHook::new(hook_address, provider.clone());
 
-        let pool_key_hex = std::env::var("CLVR_POOL_KEY")
-            .expect("CLVR_POOL_KEY must be set");
+        let pool_key_hex = std::env::var("CLVR_POOL_KEY").expect("CLVR_POOL_KEY must be set");
+        let pool_key_decoded = hex::decode(pool_key_hex).unwrap();
+        let pool_key = PoolKey::abi_decode(&pool_key_decoded, true).unwrap();
 
         Self {
             provider,
             hook_contract,
-            pool_key: pool_key_hex,
+            pool_key: pool_key,
         }
     }
 
-    pub async fn get_block_number(&self) -> u64 {
+    pub async fn run(&self) {
+        loop {
+            if !self.is_batch_block().await {
+                sleep(Duration::from_secs(1)).await;
+                continue;
+            }
+
+            let scheduled_swaps = self.hook_contract.getScheduledSwaps(self.pool_key.clone()).call().await;
+            
+            let mut omega = Omega::new();
+
+            if let Ok(swaps) = scheduled_swaps {
+                if swaps._0.len() == 0 {
+                    info!("No swaps to execute");
+                    sleep(Duration::from_secs(1)).await;
+                    continue;
+                }
+
+                for swap in swaps._0 {
+                    let trade = Trade::from(swap);
+                    omega.push(Box::new(trade));
+                }
+            }
+
+            let (reserve0, reserve1) = self.get_current_reserves().await;
+            let current_price = self.get_current_price().await;
+            let clvr_model = CLVRModel::new(reserve0, reserve1);
+
+            clvr_model.clvr_order(current_price, &mut omega);
+
+            info!("Omega: {:?}", omega);
+        }
+    }
+
+    async fn get_current_price(&self) -> U256 {
+        let result = self.hook_contract.getCurrentPrice(self.pool_key.clone()).call().await;
+        Self::safe_unwrap::<getCurrentPriceReturn>(result)._0
+    }
+
+    async fn get_current_reserves(&self) -> (U256, U256) {
+        let result = self.hook_contract.getCurrentReserves(self.pool_key.clone()).call().await;
+        let (reserve0, reserve1) = {
+            let reserves = Self::safe_unwrap::<getCurrentReservesReturn>(result);
+            (reserves._0, reserves._1)
+        };
+
+        (reserve0, reserve1)
+    }
+
+    async fn is_batch_block(&self) -> bool {
+        let block_number = self.get_block_number().await;
+        let last_batch_block = self.get_last_batch_block().await;
+        let batch_period = self.get_batch_period().await;
+
+        block_number >= last_batch_block + batch_period
+    }
+
+    async fn get_block_number(&self) -> u64 {
         self.provider.get_block_number().await.unwrap()
     }
 
-    pub async fn get_batch_period(&self) -> u64 {
+    async fn get_batch_period(&self) -> u64 {
         let result = self.hook_contract.BATCH_PERIOD().call().await;
         Self::safe_unwrap::<BATCH_PERIODReturn>(result)
             ._0
@@ -48,7 +107,7 @@ impl Executor {
             .expect("Failed to convert u256 to u64")
     }
 
-    pub async fn get_last_batch_block(&self) -> u64 {
+    async fn get_last_batch_block(&self) -> u64 {
         let result = self.hook_contract.lastBatchBlock().call().await;
         Self::safe_unwrap::<lastBatchBlockReturn>(result)
             ._0
@@ -95,5 +154,9 @@ mod tests {
 
         let last_batch_block = executor.get_last_batch_block().await;
         println!("Last batch block: {}", last_batch_block);
+
+        println!("Pool key: {:?}", executor.pool_key.tickSpacing);
+
+        executor.run().await;
     }
 }
